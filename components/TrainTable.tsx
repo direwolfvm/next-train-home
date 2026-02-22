@@ -7,6 +7,7 @@ interface TrainTableProps {
   trains: TrainPrediction[]
   walkingMinutes: number
   emptyMessage?: string
+  compact?: boolean
 }
 
 function formatMinutes(min: string): { display: string; urgency: 'normal' | 'soon' | 'now' } {
@@ -62,30 +63,33 @@ function formatCars(car: string | null): string {
   return car
 }
 
-export default function TrainTable({ trains, walkingMinutes, emptyMessage }: TrainTableProps) {
+export default function TrainTable({ trains, walkingMinutes, emptyMessage, compact }: TrainTableProps) {
   if (trains.length === 0) {
     return (
-      <div className="py-6 text-center text-slate-500 text-sm">
+      <div className={`${compact ? 'py-2' : 'py-6'} text-center text-slate-500 text-sm`}>
         {emptyMessage ?? 'No predictions available'}
       </div>
     )
   }
+
+  const rowPy = compact ? 'py-1.5' : 'py-3'
+  const headPb = compact ? 'pb-1' : 'pb-2'
 
   return (
     <div className="w-full overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-slate-500 text-xs uppercase tracking-widest border-b border-slate-800">
-            <th className="pb-2 text-left font-medium w-12">Line</th>
-            <th className="pb-2 text-left font-medium">Destination</th>
-            <th className="pb-2 text-center font-medium w-12">Cars</th>
-            <th className="pb-2 text-right font-medium w-20">Arrives</th>
-            <th className="pb-2 text-right font-medium w-32">
+            <th className={`${headPb} text-left font-medium w-12`}>Line</th>
+            <th className={`${headPb} text-left font-medium`}>Destination</th>
+            <th className={`${headPb} text-center font-medium w-12`}>Cars</th>
+            <th className={`${headPb} text-right font-medium w-20`}>Arrives</th>
+            <th className={`${headPb} text-right font-medium w-32`}>
               {walkingMinutes > 0 ? 'Leave By' : 'Arrives At'}
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800/60">
+        <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
           {trains.map((train, idx) => {
             const mins = formatMinutes(train.Min)
             const leave = formatLeaveBy(train.Min, walkingMinutes)
@@ -97,42 +101,42 @@ export default function TrainTable({ trains, walkingMinutes, emptyMessage }: Tra
                 className={`group transition-colors ${
                   missed
                     ? 'opacity-35'
-                    : 'hover:bg-slate-800/30'
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-800/30'
                 }`}
               >
-                <td className="py-3 pr-3">
+                <td className={`${rowPy} pr-3`}>
                   <LineIndicator line={train.Line} />
                 </td>
-                <td className="py-3 pr-4">
-                  <span className={missed ? 'text-slate-500 font-medium' : 'text-slate-100 font-medium'}>
+                <td className={`${rowPy} pr-4`}>
+                  <span className={missed ? 'text-slate-400 font-medium' : 'text-slate-900 dark:text-slate-100 font-medium'}>
                     {train.DestinationName || train.Destination}
                   </span>
                 </td>
-                <td className="py-3 text-center font-mono text-slate-400">
+                <td className={`${rowPy} text-center font-mono text-slate-500 dark:text-slate-400`}>
                   {formatCars(train.Car)}
                 </td>
-                <td className="py-3 text-right font-mono">
+                <td className={`${rowPy} text-right font-mono`}>
                   <span
                     className={
                       missed
-                        ? 'text-slate-500'
+                        ? 'text-slate-400'
                         : mins.urgency === 'now'
-                        ? 'text-amber-400 font-semibold'
+                        ? 'text-amber-600 dark:text-amber-400 font-semibold'
                         : mins.urgency === 'soon'
-                        ? 'text-amber-300'
-                        : 'text-slate-200'
+                        ? 'text-amber-500 dark:text-amber-300'
+                        : 'text-slate-800 dark:text-slate-200'
                     }
                   >
                     {mins.display}
                   </span>
                 </td>
-                <td className="py-3 text-right font-mono">
+                <td className={`${rowPy} text-right font-mono`}>
                   {!missed && (
                     <span
                       className={
                         leave.urgent
-                          ? 'text-rose-400 font-bold animate-pulse-slow'
-                          : 'text-slate-300'
+                          ? 'text-rose-600 dark:text-rose-400 font-bold animate-pulse-slow'
+                          : 'text-slate-700 dark:text-slate-300'
                       }
                     >
                       {leave.display}

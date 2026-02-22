@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { parseWmataJson } from '@/lib/wmata'
 
 const WMATA_BASE = 'https://api.wmata.com/Incidents.svc'
 
@@ -26,20 +27,15 @@ export async function GET(request: NextRequest) {
         : Promise.resolve(null),
     ])
 
-    // Force UTF-8 decoding regardless of the Content-Type charset declared by WMATA,
-    // which sometimes advertises iso-8859-1 while actually sending UTF-8 bytes.
-    const decodeJson = async (r: Response) => {
-      const buf = await r.arrayBuffer()
-      return JSON.parse(new TextDecoder('utf-8').decode(buf))
-    }
+    const decodeJson = async (r: Response) => parseWmataJson(await r.text())
 
     const incidentsData = incidentsRes.ok ? await decodeJson(incidentsRes) : { Incidents: [] }
     const elevatorData =
       elevatorRes && elevatorRes.ok ? await decodeJson(elevatorRes) : { ElevatorIncidents: [] }
 
     return NextResponse.json({
-      Incidents: incidentsData.Incidents || [],
-      ElevatorIncidents: elevatorData.ElevatorIncidents || [],
+      Incidents: (incidentsData as Record<string, unknown>).Incidents || [],
+      ElevatorIncidents: (elevatorData as Record<string, unknown>).ElevatorIncidents || [],
     })
   } catch (err) {
     console.error('Incidents fetch error:', err)

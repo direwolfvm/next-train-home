@@ -19,6 +19,7 @@ interface KingStreetBoardProps {
   freqStats: LineFrequencyStats
   lastUpdated: Date | null
   error: string | null
+  compact?: boolean
 }
 
 export function filterNorthbound(trains: TrainPrediction[]): TrainPrediction[] {
@@ -48,11 +49,12 @@ export default function KingStreetBoard({
   freqStats,
   lastUpdated,
   error,
+  compact,
 }: KingStreetBoardProps) {
   const northbound = filterNorthbound(trains).slice(0, MAX_ARRIVALS)
 
   return (
-    <div className="space-y-5">
+    <div className={compact ? 'space-y-2' : 'space-y-5'}>
       {/* Station header */}
       <div className="flex items-start justify-between">
         <div>
@@ -70,7 +72,7 @@ export default function KingStreetBoard({
               Blue · Yellow
             </span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-100 leading-tight">
+          <h2 className={`${compact ? 'text-xl' : 'text-2xl'} font-bold text-slate-900 dark:text-slate-100 leading-tight`}>
             King Street–Old Town
           </h2>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -79,7 +81,7 @@ export default function KingStreetBoard({
         </div>
         <div className="text-right">
           {lastUpdated && (
-            <p className="text-xs text-slate-600 tabular-nums">
+            <p className="text-xs text-slate-400 dark:text-slate-600 tabular-nums">
               {formatTime(lastUpdated)}
             </p>
           )}
@@ -90,22 +92,24 @@ export default function KingStreetBoard({
       </div>
 
       {/* Train predictions table */}
-      <div className="rounded-xl bg-slate-900/80 border border-slate-800 px-4 py-3">
+      <div className="rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 px-4 py-3">
         <TrainTable
           trains={northbound}
           walkingMinutes={WALKING_MINUTES.KING_STREET}
           emptyMessage="No northbound trains predicted"
+          compact={compact}
         />
       </div>
 
       {/* Frequency — per line */}
-      <FrequencyPanel stats={freqStats} label="Northbound Frequency" />
+      <FrequencyPanel stats={freqStats} label="Northbound Frequency" compact={compact} />
 
       {/* Incidents */}
       <IncidentsPanel
         railIncidents={railIncidents}
         elevatorIncidents={elevatorIncidents}
         relevantLines={KING_STREET_INCIDENT_LINES}
+        compact={compact}
       />
     </div>
   )

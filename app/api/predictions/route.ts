@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { parseWmataJson } from '@/lib/wmata'
 
 const WMATA_BASE = 'https://api.wmata.com/StationPrediction.svc'
 
@@ -28,9 +29,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Force UTF-8 decoding to avoid charset mismatch from WMATA headers
-    const buf = await res.arrayBuffer()
-    const data = JSON.parse(new TextDecoder('utf-8').decode(buf))
+    const data = parseWmataJson(await res.text())
     return NextResponse.json(data)
   } catch (err) {
     console.error('Predictions fetch error:', err)

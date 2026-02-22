@@ -82,7 +82,40 @@ function updateLineFreq(
 
 export default function Page() {
   const [activeStation, setActiveStation] = useState<Station>('home')
+  const [displayMode, setDisplayMode] = useState(false)
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
   const now = useClock()
+
+  // Wake Lock — keep display on while in display mode
+  useEffect(() => {
+    if (!displayMode) {
+      wakeLockRef.current?.release()
+      wakeLockRef.current = null
+      return
+    }
+
+    async function requestWakeLock() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        wakeLockRef.current = await (navigator as any).wakeLock?.request('screen')
+      } catch {
+        // Wake Lock not supported or denied — continue without it
+      }
+    }
+
+    requestWakeLock()
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') requestWakeLock()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      wakeLockRef.current?.release()
+      wakeLockRef.current = null
+    }
+  }, [displayMode])
 
   const [ksData, setKsData] = useState<StationData>({ trains: [], lastUpdated: null, error: null })
   const [fwData, setFwData] = useState<StationData>({ trains: [], lastUpdated: null, error: null })
@@ -178,9 +211,9 @@ export default function Page() {
   }, [poll])
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className={displayMode ? 'h-screen overflow-hidden flex flex-col bg-white dark:bg-slate-950' : 'min-h-screen bg-white dark:bg-slate-950'}>
       {/* Header bar */}
-      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm shrink-0">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
@@ -192,7 +225,7 @@ export default function Page() {
             </div>
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-widest leading-none">NextTrain</p>
-              <p className="text-sm font-semibold text-slate-100 leading-tight">Home</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-tight">Home</p>
             </div>
           </div>
 
@@ -200,42 +233,64 @@ export default function Page() {
           <div className="hidden sm:block text-right">
             {now && (
               <>
-                <p className="text-sm font-mono text-slate-200 tabular-nums">{formatClock(now)}</p>
+                <p className="text-sm font-mono text-slate-800 dark:text-slate-200 tabular-nums">{formatClock(now)}</p>
                 <p className="text-xs text-slate-500">{formatDate(now)}</p>
               </>
             )}
           </div>
 
-          {/* Station toggle */}
-          <div className="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
+          {/* Right controls */}
+          <div className="flex items-center gap-2">
+            {/* Display mode toggle */}
             <button
-              onClick={() => setActiveStation('home')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeStation === 'home'
-                  ? 'bg-slate-700 text-slate-100 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-300'
+              onClick={() => setDisplayMode(d => !d)}
+              title={displayMode ? 'Exit display mode' : 'Display mode — fit screen, keep awake'}
+              className={`p-1.5 rounded-lg border transition-colors ${
+                displayMode
+                  ? 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200'
+                  : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600'
               }`}
             >
-              <span>🏠</span>
-              <span>Home</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
             </button>
-            <button
-              onClick={() => setActiveStation('work')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeStation === 'work'
-                  ? 'bg-slate-700 text-slate-100 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <span>💼</span>
-              <span>Work</span>
-            </button>
+
+            {/* Station toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-800">
+              <button
+                onClick={() => setActiveStation('home')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  activeStation === 'home'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                <span>🏠</span>
+                <span>Home</span>
+              </button>
+              <button
+                onClick={() => setActiveStation('work')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  activeStation === 'work'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                <span>💼</span>
+                <span>Work</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <main className={displayMode
+        ? 'flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-3'
+        : 'max-w-2xl mx-auto px-4 py-6'
+      }>
         {activeStation === 'home' ? (
           <KingStreetBoard
             trains={ksData.trains}
@@ -244,6 +299,7 @@ export default function Page() {
             freqStats={ksFreqStats}
             lastUpdated={ksData.lastUpdated}
             error={ksData.error}
+            compact={displayMode}
           />
         ) : (
           <FarragutWestBoard
@@ -254,15 +310,18 @@ export default function Page() {
             eastFreqStats={fwEastFreqStats}
             lastUpdated={fwData.lastUpdated}
             error={fwData.error}
+            compact={displayMode}
           />
         )}
 
-        <footer className="mt-10 pt-6 border-t border-slate-800/60">
-          <div className="flex items-center justify-between text-xs text-slate-700">
-            <p>Powered by WMATA API · Refreshes every 30s</p>
-            <p>NextTrainHome</p>
-          </div>
-        </footer>
+        {!displayMode && (
+          <footer className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800/60">
+            <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-700">
+              <p>Powered by WMATA API · Refreshes every 30s</p>
+              <p>NextTrainHome</p>
+            </div>
+          </footer>
+        )}
       </main>
     </div>
   )

@@ -6,28 +6,29 @@ import { LINE_COLORS } from '@/lib/constants'
 interface FrequencyPanelProps {
   stats: LineFrequencyStats
   label?: string
+  compact?: boolean
 }
 
 const TREND_CONFIG = {
-  improving: { icon: '↓', label: 'improving', color: 'text-emerald-400' },
-  worsening: { icon: '↑', label: 'worsening', color: 'text-rose-400' },
-  stable: { icon: '→', label: 'stable', color: 'text-slate-400' },
-  unknown: { icon: '·', label: 'estimating…', color: 'text-slate-500' },
+  improving: { icon: '↓', label: 'improving', color: 'text-emerald-600 dark:text-emerald-400' },
+  worsening: { icon: '↑', label: 'worsening', color: 'text-rose-600 dark:text-rose-400' },
+  stable: { icon: '→', label: 'stable', color: 'text-slate-500 dark:text-slate-400' },
+  unknown: { icon: '·', label: 'estimating…', color: 'text-slate-400 dark:text-slate-500' },
 }
 
-export default function FrequencyPanel({ stats, label }: FrequencyPanelProps) {
+export default function FrequencyPanel({ stats, label, compact }: FrequencyPanelProps) {
   const entries = Object.entries(stats)
 
   return (
-    <div className="py-3 px-4 rounded-lg bg-slate-800/40 border border-slate-800">
-      <p className="text-xs text-slate-500 uppercase tracking-widest mb-2.5">
+    <div className={`${compact ? 'py-2 px-3' : 'py-3 px-4'} rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800`}>
+      <p className={`text-xs text-slate-500 uppercase tracking-widest ${compact ? 'mb-1.5' : 'mb-2.5'}`}>
         {label ?? 'Train Frequency'}
       </p>
 
       {entries.length === 0 ? (
-        <p className="text-slate-600 text-sm font-mono">Estimating…</p>
+        <p className="text-slate-400 dark:text-slate-600 text-sm font-mono">Estimating…</p>
       ) : (
-        <div className="space-y-2">
+        <div className={compact ? 'space-y-1' : 'space-y-2'}>
           {entries.map(([line, s]) => {
             const colors = LINE_COLORS[line] ?? { bg: '#555', text: '#fff' }
             const cfg = TREND_CONFIG[s.trend]
@@ -42,7 +43,7 @@ export default function FrequencyPanel({ stats, label }: FrequencyPanelProps) {
                 </span>
 
                 {/* Interval */}
-                <span className="font-mono text-sm font-semibold text-slate-100 w-16 tabular-nums">
+                <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100 w-16 tabular-nums">
                   {s.currentAvgMinutes != null ? `~${s.currentAvgMinutes} min` : '—'}
                 </span>
 
@@ -52,7 +53,7 @@ export default function FrequencyPanel({ stats, label }: FrequencyPanelProps) {
 
                 {/* Sample count */}
                 {s.sampleCount > 0 && (
-                  <span className="text-xs text-slate-700 ml-auto tabular-nums">
+                  <span className="text-xs text-slate-400 dark:text-slate-700 ml-auto tabular-nums">
                     {s.sampleCount} samples
                   </span>
                 )}

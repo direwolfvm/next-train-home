@@ -21,6 +21,7 @@ interface FarragutWestBoardProps {
   eastFreqStats: LineFrequencyStats    // eastbound BL / OR / SV
   lastUpdated: Date | null
   error: string | null
+  compact?: boolean
 }
 
 // At Farragut West, Group '1' = eastbound (toward Largo/New Carrollton),
@@ -58,12 +59,13 @@ export default function FarragutWestBoard({
   eastFreqStats,
   lastUpdated,
   error,
+  compact,
 }: FarragutWestBoardProps) {
   const southboundBlue = trains.filter(isSouthboundBlue).slice(0, SOUTHBOUND_BLUE_MAX)
   const towardLargo = trains.filter(isTowardLargo).slice(0, TOWARD_LARGO_MAX)
 
   return (
-    <div className="space-y-5">
+    <div className={compact ? 'space-y-2' : 'space-y-5'}>
       {/* Station header */}
       <div className="flex items-start justify-between">
         <div>
@@ -75,68 +77,71 @@ export default function FarragutWestBoard({
               Blue · Orange · Silver
             </span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-100 leading-tight">Farragut West</h2>
+          <h2 className={`${compact ? 'text-xl' : 'text-2xl'} font-bold text-slate-900 dark:text-slate-100 leading-tight`}>Farragut West</h2>
           <p className="text-sm text-slate-500 mt-0.5">Work Station</p>
         </div>
         <div className="text-right">
           {lastUpdated && (
-            <p className="text-xs text-slate-600 tabular-nums">{formatTime(lastUpdated)}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-600 tabular-nums">{formatTime(lastUpdated)}</p>
           )}
           {error && <p className="text-xs text-rose-500 mt-1">⚠ {error}</p>}
         </div>
       </div>
 
       {/* Southbound Blue */}
-      <div className="rounded-xl bg-slate-900/80 border border-slate-800 overflow-hidden">
+      <div className="rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div
-          className="px-4 py-2 border-b border-slate-800 flex items-center gap-2"
+          className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2"
           style={{ borderLeftWidth: 3, borderLeftColor: '#009CDE', borderLeftStyle: 'solid' }}
         >
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
             To Virginia
           </span>
-          <span className="text-xs text-slate-600">Blue Line southbound</span>
+          <span className="text-xs text-slate-400 dark:text-slate-600">Blue Line southbound</span>
         </div>
         <div className="px-4 py-3">
           <TrainTable
             trains={southboundBlue}
             walkingMinutes={WALKING_MINUTES.FARRAGUT_WEST}
             emptyMessage="No southbound Blue Line trains predicted"
+            compact={compact}
           />
         </div>
       </div>
 
       {/* Southbound Blue frequency */}
-      <FrequencyPanel stats={southFreqStats} label="To Virginia · Frequency" />
+      <FrequencyPanel stats={southFreqStats} label="To Virginia · Frequency" compact={compact} />
 
       {/* Toward Largo */}
-      <div className="rounded-xl bg-slate-900/80 border border-slate-800 overflow-hidden">
+      <div className="rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div
-          className="px-4 py-2 border-b border-slate-800 flex items-center gap-2"
+          className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2"
           style={{ borderLeftWidth: 3, borderLeftColor: '#919D9D', borderLeftStyle: 'solid' }}
         >
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
             To Largo / New Carrollton
           </span>
-          <span className="text-xs text-slate-600">Blue · Orange · Silver</span>
+          <span className="text-xs text-slate-400 dark:text-slate-600">Blue · Orange · Silver</span>
         </div>
         <div className="px-4 py-3">
           <TrainTable
             trains={towardLargo}
             walkingMinutes={WALKING_MINUTES.FARRAGUT_WEST}
             emptyMessage="No eastbound trains predicted"
+            compact={compact}
           />
         </div>
       </div>
 
       {/* Eastbound frequency — per line */}
-      <FrequencyPanel stats={eastFreqStats} label="To Largo · Frequency by Line" />
+      <FrequencyPanel stats={eastFreqStats} label="To Largo · Frequency by Line" compact={compact} />
 
       {/* Incidents */}
       <IncidentsPanel
         railIncidents={railIncidents}
         elevatorIncidents={elevatorIncidents}
         relevantLines={FARRAGUT_WEST_INCIDENT_LINES}
+        compact={compact}
       />
     </div>
   )
