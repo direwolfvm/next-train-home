@@ -211,9 +211,9 @@ export default function Page() {
   }, [poll])
 
   return (
-    <div className={displayMode ? 'h-screen overflow-hidden flex flex-col bg-white dark:bg-slate-950' : 'min-h-screen bg-white dark:bg-slate-950'}>
+    <div className="min-h-screen bg-white dark:bg-slate-950">
       {/* Header bar */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm shrink-0">
+      <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
@@ -287,10 +287,7 @@ export default function Page() {
       </header>
 
       {/* Main content */}
-      <main className={displayMode
-        ? 'flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-3'
-        : 'max-w-2xl mx-auto px-4 py-6'
-      }>
+      <main className="max-w-2xl mx-auto px-4 py-6">
         {activeStation === 'home' ? (
           <KingStreetBoard
             trains={ksData.trains}
@@ -299,7 +296,6 @@ export default function Page() {
             freqStats={ksFreqStats}
             lastUpdated={ksData.lastUpdated}
             error={ksData.error}
-            compact={displayMode}
           />
         ) : (
           <FarragutWestBoard
@@ -310,18 +306,15 @@ export default function Page() {
             eastFreqStats={fwEastFreqStats}
             lastUpdated={fwData.lastUpdated}
             error={fwData.error}
-            compact={displayMode}
           />
         )}
 
-        {!displayMode && (
-          <footer className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800/60">
-            <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-700">
-              <p>Powered by WMATA API · Refreshes every 30s</p>
-              <p>NextTrainHome</p>
-            </div>
-          </footer>
-        )}
+        <footer className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800/60">
+          <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-700">
+            <p>Powered by WMATA API · Refreshes every 30s</p>
+            <p>NextTrainHome</p>
+          </div>
+        </footer>
       </main>
     </div>
   )
