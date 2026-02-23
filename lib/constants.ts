@@ -23,12 +23,13 @@ export const LINE_COLORS: Record<string, { bg: string; text: string; name: strin
 }
 
 // King Street: northbound = heading toward DC/Maryland (away from VA terminals)
-// Southbound VA-bound destinations to exclude:
+// Primary filter is Group === '2' (southbound) in filterNorthbound().
+// These codes are a fallback for cases where Group is absent or wrong.
 export const KING_STREET_VA_TERMINALS = new Set([
   'J03', // Franconia-Springfield (Blue southbound terminus)
-  'J02', // Van Dorn Street
-  'E06', // Huntington (Yellow southbound terminus)
-  'E05', // Eisenhower Avenue (short-turn Yellow)
+  'J02', // Van Dorn Street (Blue short-turn)
+  'C15', // Huntington (Yellow southbound terminus)
+  'C14', // Eisenhower Avenue (Yellow short-turn)
 ])
 
 // Farragut West: VA-bound destinations (westbound)

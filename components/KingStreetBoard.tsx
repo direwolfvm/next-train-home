@@ -26,10 +26,11 @@ export function filterNorthbound(trains: TrainPrediction[]): TrainPrediction[] {
   return trains.filter(t => {
     if (!KING_STREET_LINES.has(t.Line)) return false
     if (t.Line === 'No' || t.Line === '') return false
-    // Exclude trains heading to Virginia terminals
-    if (t.DestinationCode && KING_STREET_VA_TERMINALS.has(t.DestinationCode)) return false
-    // Exclude "No Passenger" trains
     if (t.DestinationName === 'No Passenger') return false
+    // Group '2' = southbound (toward Virginia) at King Street — confirmed from live API
+    if (t.Group === '2') return false
+    // Fallback: DestinationCode exclusion for when Group is missing or wrong
+    if (t.DestinationCode && KING_STREET_VA_TERMINALS.has(t.DestinationCode)) return false
     return true
   })
 }
