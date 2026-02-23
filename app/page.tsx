@@ -73,9 +73,10 @@ function updateLineFreq(
     if (freq !== null) {
       snapshotMap[line] = addSnapshot(snapshotMap[line], freq)
     }
-    if (snapshotMap[line].length > 0) {
-      stats[line] = deriveFrequencyStats(snapshotMap[line])
-    }
+    // Always emit an entry so every tracked line appears in the panel,
+    // even when there aren't yet enough trains to calculate a snapshot.
+    // deriveFrequencyStats handles an empty array by returning null/unknown.
+    stats[line] = deriveFrequencyStats(snapshotMap[line])
   }
   return stats
 }
