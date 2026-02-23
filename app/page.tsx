@@ -61,6 +61,39 @@ function formatDate(date: Date): string {
   })
 }
 
+// Minimum gap between two recorded arrivals for the same line.
+// Prevents a train that stays BRD across consecutive polls from being counted twice.
+const MIN_ARRIVAL_GAP_MS = 3 * 60 * 1000
+
+/**
+ * Async fallback frequency estimator: when the prediction window only shows
+ * one train at a time, record BRD/ARR events across polls and use the elapsed
+ * time between successive arrivals as a frequency snapshot.
+ */
+function recordArrivals(
+  trains: TrainPrediction[],
+  lastArrivalMap: Record<string, number>,
+  snapshotMap: SnapshotMap,
+): void {
+  const now = Date.now()
+  for (const train of trains) {
+    if (train.Min !== 'ARR' && train.Min !== 'BRD') continue
+    const line = train.Line
+    if (!(line in snapshotMap)) continue
+
+    const last = lastArrivalMap[line]
+    if (last !== undefined && now - last < MIN_ARRIVAL_GAP_MS) continue
+
+    if (last !== undefined) {
+      const intervalMin = (now - last) / 60_000
+      if (intervalMin >= 1 && intervalMin <= 60) {
+        snapshotMap[line] = addSnapshot(snapshotMap[line], intervalMin)
+      }
+    }
+    lastArrivalMap[line] = now
+  }
+}
+
 /** Update a snapshot map for a set of lines and return new LineFrequencyStats. */
 function updateLineFreq(
   snapshotMap: SnapshotMap,
@@ -130,6 +163,11 @@ export default function Page() {
   const fwSouthSnapshots = useRef<SnapshotMap>(makeSnapshotMap(FW_SOUTH_LINES))
   const fwEastSnapshots = useRef<SnapshotMap>(makeSnapshotMap(FW_EAST_LINES))
 
+  // Last BRD/ARR timestamp per line — feeds the async arrival-tracking fallback
+  const ksLastArrival = useRef<Record<string, number>>({})
+  const fwSouthLastArrival = useRef<Record<string, number>>({})
+  const fwEastLastArrival = useRef<Record<string, number>>({})
+
   // Derived frequency stats (trigger re-renders)
   const [ksFreqStats, setKsFreqStats] = useState<LineFrequencyStats>({})
   const [fwSouthFreqStats, setFwSouthFreqStats] = useState<LineFrequencyStats>({})
@@ -162,6 +200,7 @@ export default function Page() {
       setKsData({ trains, lastUpdated: new Date(), error: null })
 
       const northbound = filterNorthbound(trains)
+      recordArrivals(northbound, ksLastArrival.current, ksSnapshots.current)
       const byLine = Object.fromEntries(
         KS_LINES.map(line => [line, northbound.filter(t => t.Line === line)])
       )
@@ -179,12 +218,14 @@ export default function Page() {
       const southBL = trains.filter(
         t => t.Line === 'BL' && (t.Group === '2' || (t.DestinationCode && ['J03', 'J02'].includes(t.DestinationCode)))
       )
+      recordArrivals(southBL, fwSouthLastArrival.current, fwSouthSnapshots.current)
       setFwSouthFreqStats(updateLineFreq(fwSouthSnapshots.current, { BL: southBL }))
 
       // Eastbound BL / OR / SV: Group 1 = eastbound at Farragut West
       const eastByLine = Object.fromEntries(
         FW_EAST_LINES.map(line => [line, trains.filter(t => t.Line === line && t.Group === '1')])
       )
+      recordArrivals(Object.values(eastByLine).flat(), fwEastLastArrival.current, fwEastSnapshots.current)
       setFwEastFreqStats(updateLineFreq(fwEastSnapshots.current, eastByLine))
     } else {
       setFwData(prev => ({ ...prev, error: 'Failed to fetch Farragut West data' }))
