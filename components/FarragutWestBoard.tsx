@@ -5,13 +5,12 @@ import {
   FARRAGUT_VA_TERMINALS,
   FARRAGUT_WEST_INCIDENT_LINES,
   WALKING_MINUTES,
+  MAX_ARRIVALS,
 } from '@/lib/constants'
 import TrainTable from './TrainTable'
 import FrequencyPanel from './FrequencyPanel'
 import IncidentsPanel from './IncidentsPanel'
 
-const SOUTHBOUND_BLUE_MAX = 2
-const TOWARD_LARGO_MAX = 2
 
 interface FarragutWestBoardProps {
   trains: TrainPrediction[]
@@ -61,8 +60,8 @@ export default function FarragutWestBoard({
   error,
   compact,
 }: FarragutWestBoardProps) {
-  const southboundBlue = trains.filter(isSouthboundBlue).slice(0, SOUTHBOUND_BLUE_MAX)
-  const towardLargo = trains.filter(isTowardLargo).slice(0, TOWARD_LARGO_MAX)
+  const southboundBlue = trains.filter(isSouthboundBlue).slice(0, MAX_ARRIVALS)
+  const towardLargo = trains.filter(isTowardLargo).slice(0, MAX_ARRIVALS)
 
   return (
     <div className={compact ? 'space-y-2' : 'space-y-5'}>
