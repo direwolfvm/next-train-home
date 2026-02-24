@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import {
   TrainPrediction,
   RailIncident,
@@ -8,24 +9,34 @@ import {
   FrequencySnapshot,
   LineFrequencyStats,
   Station,
+  UserSettings,
 } from '@/lib/types'
-import { STATION_CODES } from '@/lib/constants'
 import { calcInstantFrequency, addSnapshot, deriveFrequencyStats } from '@/lib/frequency'
-import { filterNorthbound } from '@/components/KingStreetBoard'
-import KingStreetBoard from '@/components/KingStreetBoard'
-import FarragutWestBoard from '@/components/FarragutWestBoard'
+import { filterDirection } from '@/lib/trainFilter'
+import { loadSettings } from '@/lib/settings'
+import StationBoard from '@/components/StationBoard'
 
 const POLL_INTERVAL_MS = 30_000
-
-// Lines tracked per station
-const KS_LINES = ['BL', 'YL'] as const
-const FW_SOUTH_LINES = ['BL'] as const          // southbound: Blue only
-const FW_EAST_LINES = ['BL', 'OR', 'SV'] as const // toward Largo: all three
 
 type SnapshotMap = Record<string, FrequencySnapshot[]>
 
 function makeSnapshotMap(lines: readonly string[]): SnapshotMap {
   return Object.fromEntries(lines.map(l => [l, []]))
+}
+
+// key: `${stationCode}:${directionIndex}`, e.g. "C13:0", "C03:1"
+type AllSnapshotMaps = Record<string, SnapshotMap>
+type AllArrivalMaps = Record<string, Record<string, number>>
+
+function makeAllSnapshots(settings: UserSettings): AllSnapshotMaps {
+  const result: AllSnapshotMaps = {}
+  for (const role of ['home', 'work'] as const) {
+    const station = settings[role]
+    station.directions.forEach((dir, i) => {
+      result[`${station.stationCode}:${i}`] = makeSnapshotMap(dir.lines)
+    })
+  }
+  return result
 }
 
 interface StationData {
@@ -35,7 +46,6 @@ interface StationData {
 }
 
 function useClock() {
-  // Start null to avoid server/client mismatch (hydration error).
   const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
     setNow(new Date())
@@ -61,15 +71,8 @@ function formatDate(date: Date): string {
   })
 }
 
-// Minimum gap between two recorded arrivals for the same line.
-// Prevents a train that stays BRD across consecutive polls from being counted twice.
 const MIN_ARRIVAL_GAP_MS = 3 * 60 * 1000
 
-/**
- * Async fallback frequency estimator: when the prediction window only shows
- * one train at a time, record BRD/ARR events across polls and use the elapsed
- * time between successive arrivals as a frequency snapshot.
- */
 function recordArrivals(
   trains: TrainPrediction[],
   lastArrivalMap: Record<string, number>,
@@ -94,7 +97,6 @@ function recordArrivals(
   }
 }
 
-/** Update a snapshot map for a set of lines and return new LineFrequencyStats. */
 function updateLineFreq(
   snapshotMap: SnapshotMap,
   trainsByLine: Record<string, TrainPrediction[]>
@@ -106,9 +108,6 @@ function updateLineFreq(
     if (freq !== null) {
       snapshotMap[line] = addSnapshot(snapshotMap[line], freq)
     }
-    // Always emit an entry so every tracked line appears in the panel,
-    // even when there aren't yet enough trains to calculate a snapshot.
-    // deriveFrequencyStats handles an empty array by returning null/unknown.
     stats[line] = deriveFrequencyStats(snapshotMap[line])
   }
   return stats
@@ -119,6 +118,8 @@ export default function Page() {
   const [displayMode, setDisplayMode] = useState(false)
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
   const now = useClock()
+
+  const [settings] = useState<UserSettings>(() => loadSettings())
 
   // Wake Lock — keep display on while in display mode
   useEffect(() => {
@@ -151,27 +152,21 @@ export default function Page() {
     }
   }, [displayMode])
 
-  const [ksData, setKsData] = useState<StationData>({ trains: [], lastUpdated: null, error: null })
-  const [fwData, setFwData] = useState<StationData>({ trains: [], lastUpdated: null, error: null })
+  const [stationData, setStationData] = useState<Record<'home' | 'work', StationData>>({
+    home: { trains: [], lastUpdated: null, error: null },
+    work: { trains: [], lastUpdated: null, error: null },
+  })
 
   const [railIncidents, setRailIncidents] = useState<RailIncident[]>([])
-  const [elevatorIncidentsKS, setElevatorIncidentsKS] = useState<ElevatorIncident[]>([])
-  const [elevatorIncidentsFW, setElevatorIncidentsFW] = useState<ElevatorIncident[]>([])
+  const [elevatorIncidentsHome, setElevatorIncidentsHome] = useState<ElevatorIncident[]>([])
+  const [elevatorIncidentsWork, setElevatorIncidentsWork] = useState<ElevatorIncident[]>([])
 
-  // Per-line snapshot maps (mutable refs, no re-render on update)
-  const ksSnapshots = useRef<SnapshotMap>(makeSnapshotMap(KS_LINES))
-  const fwSouthSnapshots = useRef<SnapshotMap>(makeSnapshotMap(FW_SOUTH_LINES))
-  const fwEastSnapshots = useRef<SnapshotMap>(makeSnapshotMap(FW_EAST_LINES))
+  // Compound-keyed snapshot and arrival maps
+  const snapshotMapsRef = useRef<AllSnapshotMaps>(makeAllSnapshots(settings))
+  const lastArrivalMapsRef = useRef<AllArrivalMaps>({})
 
-  // Last BRD/ARR timestamp per line — feeds the async arrival-tracking fallback
-  const ksLastArrival = useRef<Record<string, number>>({})
-  const fwSouthLastArrival = useRef<Record<string, number>>({})
-  const fwEastLastArrival = useRef<Record<string, number>>({})
-
-  // Derived frequency stats (trigger re-renders)
-  const [ksFreqStats, setKsFreqStats] = useState<LineFrequencyStats>({})
-  const [fwSouthFreqStats, setFwSouthFreqStats] = useState<LineFrequencyStats>({})
-  const [fwEastFreqStats, setFwEastFreqStats] = useState<LineFrequencyStats>({})
+  // Frequency stats keyed by `${stationCode}:${directionIndex}`
+  const [freqStatsByKey, setFreqStatsByKey] = useState<Record<string, LineFrequencyStats>>({})
 
   const fetchPredictions = useCallback(async (stationCode: string): Promise<TrainPrediction[]> => {
     const res = await fetch(`/api/predictions?stations=${stationCode}`)
@@ -188,69 +183,81 @@ export default function Page() {
   }, [])
 
   const poll = useCallback(async () => {
-    const [ksResult, fwResult, incResult] = await Promise.allSettled([
-      fetchPredictions(STATION_CODES.KING_STREET),
-      fetchPredictions(STATION_CODES.FARRAGUT_WEST),
-      fetchIncidents(STATION_CODES.KING_STREET),
+    const [homeResult, workResult, incResult] = await Promise.allSettled([
+      fetchPredictions(settings.home.stationCode),
+      fetchPredictions(settings.work.stationCode),
+      fetchIncidents(settings.home.stationCode),
     ])
 
-    // ── King Street ──────────────────────────────────────────
-    if (ksResult.status === 'fulfilled') {
-      const trains = ksResult.value
-      setKsData({ trains, lastUpdated: new Date(), error: null })
+    // Helper: update frequency for one station's result
+    function processStation(
+      role: 'home' | 'work',
+      trains: TrainPrediction[],
+    ) {
+      const station = settings[role]
+      const freqUpdates: Record<string, LineFrequencyStats> = {}
 
-      const northbound = filterNorthbound(trains)
-      recordArrivals(northbound, ksLastArrival.current, ksSnapshots.current)
-      const byLine = Object.fromEntries(
-        KS_LINES.map(line => [line, northbound.filter(t => t.Line === line)])
-      )
-      setKsFreqStats(updateLineFreq(ksSnapshots.current, byLine))
-    } else {
-      setKsData(prev => ({ ...prev, error: 'Failed to fetch King Street data' }))
+      station.directions.forEach((dir, i) => {
+        const key = `${station.stationCode}:${i}`
+        const snapMap = snapshotMapsRef.current[key]
+        if (!snapMap) return
+
+        const dirTrains = filterDirection(trains, dir)
+
+        if (!lastArrivalMapsRef.current[key]) lastArrivalMapsRef.current[key] = {}
+        recordArrivals(dirTrains, lastArrivalMapsRef.current[key], snapMap)
+
+        const byLine = Object.fromEntries(
+          dir.lines.map(line => [line, dirTrains.filter(t => t.Line === line)])
+        )
+        freqUpdates[key] = updateLineFreq(snapMap, byLine)
+      })
+
+      setFreqStatsByKey(prev => ({ ...prev, ...freqUpdates }))
     }
 
-    // ── Farragut West ────────────────────────────────────────
-    if (fwResult.status === 'fulfilled') {
-      const trains = fwResult.value
-      setFwData({ trains, lastUpdated: new Date(), error: null })
-
-      // Southbound Blue: Group 2 = westbound at Farragut West
-      const southBL = trains.filter(
-        t => t.Line === 'BL' && (t.Group === '2' || (t.DestinationCode && ['J03', 'J02'].includes(t.DestinationCode)))
-      )
-      recordArrivals(southBL, fwSouthLastArrival.current, fwSouthSnapshots.current)
-      setFwSouthFreqStats(updateLineFreq(fwSouthSnapshots.current, { BL: southBL }))
-
-      // Eastbound BL / OR / SV: Group 1 = eastbound at Farragut West
-      const eastByLine = Object.fromEntries(
-        FW_EAST_LINES.map(line => [line, trains.filter(t => t.Line === line && t.Group === '1')])
-      )
-      recordArrivals(Object.values(eastByLine).flat(), fwEastLastArrival.current, fwEastSnapshots.current)
-      setFwEastFreqStats(updateLineFreq(fwEastSnapshots.current, eastByLine))
+    if (homeResult.status === 'fulfilled') {
+      const trains = homeResult.value
+      setStationData(prev => ({ ...prev, home: { trains, lastUpdated: new Date(), error: null } }))
+      processStation('home', trains)
     } else {
-      setFwData(prev => ({ ...prev, error: 'Failed to fetch Farragut West data' }))
+      setStationData(prev => ({ ...prev, home: { ...prev.home, error: 'Failed to fetch home station data' } }))
     }
 
-    // ── Incidents ────────────────────────────────────────────
+    if (workResult.status === 'fulfilled') {
+      const trains = workResult.value
+      setStationData(prev => ({ ...prev, work: { trains, lastUpdated: new Date(), error: null } }))
+      processStation('work', trains)
+    } else {
+      setStationData(prev => ({ ...prev, work: { ...prev.work, error: 'Failed to fetch work station data' } }))
+    }
+
     if (incResult.status === 'fulfilled') {
       const data = incResult.value
       setRailIncidents(data.Incidents ?? [])
-      setElevatorIncidentsKS(data.ElevatorIncidents ?? [])
+      setElevatorIncidentsHome(data.ElevatorIncidents ?? [])
     }
 
     try {
-      const fwInc = await fetchIncidents(STATION_CODES.FARRAGUT_WEST)
-      setElevatorIncidentsFW(fwInc.ElevatorIncidents ?? [])
+      const workInc = await fetchIncidents(settings.work.stationCode)
+      setElevatorIncidentsWork(workInc.ElevatorIncidents ?? [])
     } catch {
       // Non-critical
     }
-  }, [fetchPredictions, fetchIncidents])
+  }, [settings, fetchPredictions, fetchIncidents])
 
   useEffect(() => {
     poll()
     const interval = setInterval(poll, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [poll])
+
+  const homeFreqStats = settings.home.directions.map((_, i) =>
+    freqStatsByKey[`${settings.home.stationCode}:${i}`] ?? {}
+  )
+  const workFreqStats = settings.work.directions.map((_, i) =>
+    freqStatsByKey[`${settings.work.stationCode}:${i}`] ?? {}
+  )
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950">
@@ -283,10 +290,22 @@ export default function Page() {
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
+            {/* Settings link */}
+            <Link
+              href="/settings"
+              title="Settings"
+              className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </Link>
+
             {/* Display mode toggle */}
             <button
               onClick={() => setDisplayMode(d => !d)}
-              title={displayMode ? 'Exit display mode' : 'Display mode — fit screen, keep awake'}
+              title={displayMode ? 'Exit display mode' : 'Display mode — keep screen awake'}
               className={`p-1.5 rounded-lg border transition-colors ${
                 displayMode
                   ? 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200'
@@ -331,23 +350,24 @@ export default function Page() {
       {/* Main content */}
       <main className="max-w-2xl mx-auto px-4 py-6">
         {activeStation === 'home' ? (
-          <KingStreetBoard
-            trains={ksData.trains}
+          <StationBoard
+            config={settings.home}
+            trains={stationData.home.trains}
             railIncidents={railIncidents}
-            elevatorIncidents={elevatorIncidentsKS}
-            freqStats={ksFreqStats}
-            lastUpdated={ksData.lastUpdated}
-            error={ksData.error}
+            elevatorIncidents={elevatorIncidentsHome}
+            freqStatsByDirection={homeFreqStats}
+            lastUpdated={stationData.home.lastUpdated}
+            error={stationData.home.error}
           />
         ) : (
-          <FarragutWestBoard
-            trains={fwData.trains}
+          <StationBoard
+            config={settings.work}
+            trains={stationData.work.trains}
             railIncidents={railIncidents}
-            elevatorIncidents={elevatorIncidentsFW}
-            southFreqStats={fwSouthFreqStats}
-            eastFreqStats={fwEastFreqStats}
-            lastUpdated={fwData.lastUpdated}
-            error={fwData.error}
+            elevatorIncidents={elevatorIncidentsWork}
+            freqStatsByDirection={workFreqStats}
+            lastUpdated={stationData.work.lastUpdated}
+            error={stationData.work.error}
           />
         )}
 
