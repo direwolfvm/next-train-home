@@ -111,6 +111,11 @@ export default function TrainTable({ trains, walkingMinutes, emptyMessage, compa
                   <span className={missed ? 'text-slate-400 font-medium' : 'text-slate-900 dark:text-slate-100 font-medium'}>
                     {train.DestinationName || train.Destination}
                   </span>
+                  {train.scheduled && (
+                    <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-600">
+                      sched
+                    </span>
+                  )}
                 </td>
                 <td className={`${rowPy} text-center font-mono text-slate-500 dark:text-slate-400`}>
                   {formatCars(train.Car)}
@@ -129,11 +134,6 @@ export default function TrainTable({ trains, walkingMinutes, emptyMessage, compa
                   >
                     {mins.display}
                   </span>
-                  {train.scheduled && (
-                    <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-600">
-                      sched
-                    </span>
-                  )}
                 </td>
                 <td className={`${rowPy} text-right font-mono`}>
                   {!missed && (
