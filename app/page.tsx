@@ -7,9 +7,11 @@ import {
   RailIncident,
   ElevatorIncident,
   FrequencySnapshot,
+  GtfsArrival,
   LineFrequencyStats,
   Station,
   UserSettings,
+  WmataStation,
 } from '@/lib/types'
 import { calcInstantFrequency, addSnapshot, deriveFrequencyStats } from '@/lib/frequency'
 import { filterDirection } from '@/lib/trainFilter'
@@ -168,6 +170,22 @@ export default function Page() {
   // Frequency stats keyed by `${stationCode}:${directionIndex}`
   const [freqStatsByKey, setFreqStatsByKey] = useState<Record<string, LineFrequencyStats>>({})
 
+  // GTFS-RT arrivals (supplemental)
+  const [gtfsArrivals, setGtfsArrivals] = useState<GtfsArrival[]>([])
+
+  // Station code → name map for resolving GTFS-RT destination codes
+  const [stationMap, setStationMap] = useState<Record<string, string>>({})
+  useEffect(() => {
+    fetch('/api/stations')
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<string, string> = {}
+        for (const s of (data.Stations ?? []) as WmataStation[]) map[s.Code] = s.Name
+        setStationMap(map)
+      })
+      .catch(() => {})
+  }, [])
+
   const fetchPredictions = useCallback(async (stationCode: string): Promise<TrainPrediction[]> => {
     const res = await fetch(`/api/predictions?stations=${stationCode}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -182,12 +200,24 @@ export default function Page() {
     return res.json()
   }, [])
 
+  const fetchGtfsArrivals = useCallback(async (stationCodes: string[]): Promise<GtfsArrival[]> => {
+    const res = await fetch(`/api/gtfs-rt?stations=${stationCodes.join(',')}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.arrivals ?? []
+  }, [])
+
   const poll = useCallback(async () => {
-    const [homeResult, workResult, incResult] = await Promise.allSettled([
+    const [homeResult, workResult, incResult, gtfsResult] = await Promise.allSettled([
       fetchPredictions(settings.home.stationCode),
       fetchPredictions(settings.work.stationCode),
       fetchIncidents(settings.home.stationCode),
+      fetchGtfsArrivals([settings.home.stationCode, settings.work.stationCode]),
     ])
+
+    if (gtfsResult.status === 'fulfilled') {
+      setGtfsArrivals(gtfsResult.value)
+    }
 
     // Helper: update frequency for one station's result
     function processStation(
@@ -244,7 +274,7 @@ export default function Page() {
     } catch {
       // Non-critical
     }
-  }, [settings, fetchPredictions, fetchIncidents])
+  }, [settings, fetchPredictions, fetchIncidents, fetchGtfsArrivals])
 
   useEffect(() => {
     poll()
@@ -353,6 +383,8 @@ export default function Page() {
           <StationBoard
             config={settings.home}
             trains={stationData.home.trains}
+            gtfsArrivals={gtfsArrivals.filter(a => a.stationCode === settings.home.stationCode)}
+            stationMap={stationMap}
             railIncidents={railIncidents}
             elevatorIncidents={elevatorIncidentsHome}
             freqStatsByDirection={homeFreqStats}
@@ -363,6 +395,8 @@ export default function Page() {
           <StationBoard
             config={settings.work}
             trains={stationData.work.trains}
+            gtfsArrivals={gtfsArrivals.filter(a => a.stationCode === settings.work.stationCode)}
+            stationMap={stationMap}
             railIncidents={railIncidents}
             elevatorIncidents={elevatorIncidentsWork}
             freqStatsByDirection={workFreqStats}

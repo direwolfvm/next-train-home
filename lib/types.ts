@@ -70,6 +70,16 @@ export interface UserSettings {
   work: StationConfig
 }
 
+// GTFS-RT arrival from trip updates feed
+export interface GtfsArrival {
+  stationCode: string
+  line: string           // "BL", "YL", etc. (mapped from route_id)
+  directionId: number    // 0 or 1
+  arrivalTime: number    // Unix timestamp in seconds
+  destinationCode: string | null
+  tripId: string
+}
+
 // Shape of a station entry from WMATA /Rail.svc/json/jStations
 export interface WmataStation {
   Code: string

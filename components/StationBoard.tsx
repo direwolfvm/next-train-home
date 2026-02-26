@@ -1,6 +1,15 @@
 'use client'
 
-import { TrainPrediction, RailIncident, ElevatorIncident, LineFrequencyStats, StationConfig } from '@/lib/types'
+import {
+  TrainPrediction,
+  RailIncident,
+  ElevatorIncident,
+  LineFrequencyStats,
+  StationConfig,
+  GtfsArrival,
+  DirectionConfig,
+  LineCode,
+} from '@/lib/types'
 import { LINE_COLORS, MAX_ARRIVALS } from '@/lib/constants'
 import { filterDirection } from '@/lib/trainFilter'
 import TrainTable from './TrainTable'
@@ -10,6 +19,8 @@ import IncidentsPanel from './IncidentsPanel'
 interface StationBoardProps {
   config: StationConfig
   trains: TrainPrediction[]
+  gtfsArrivals: GtfsArrival[]
+  stationMap: Record<string, string>
   railIncidents: RailIncident[]
   elevatorIncidents: ElevatorIncident[]
   freqStatsByDirection: LineFrequencyStats[]  // parallel-indexed to config.directions
@@ -26,9 +37,59 @@ function formatTime(date: Date): string {
   return `${h % 12 || 12}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} ${ampm}`
 }
 
+function mergeArrivals(
+  realtimeTrains: TrainPrediction[],
+  gtfsArrivals: GtfsArrival[],
+  dir: DirectionConfig,
+  stationMap: Record<string, string>,
+): TrainPrediction[] {
+  const now = Date.now() / 1000
+
+  // Convert matching GTFS-RT arrivals to synthetic TrainPrediction objects
+  const gtfsDirArrivals = gtfsArrivals
+    .filter(a =>
+      (dir.lines as string[]).includes(a.line) &&
+      a.directionId === (dir.group === '1' ? 0 : 1) &&
+      a.arrivalTime > now
+    )
+    .map(a => ({
+      Car: null,
+      Destination: stationMap[a.destinationCode ?? ''] ?? a.destinationCode ?? '',
+      DestinationCode: a.destinationCode,
+      DestinationName: stationMap[a.destinationCode ?? ''] ?? a.destinationCode ?? 'Train',
+      Group: dir.group,
+      Line: a.line as LineCode,
+      LocationCode: a.stationCode,
+      LocationName: '',
+      Min: String(Math.max(1, Math.round((a.arrivalTime - now) / 60))),
+    }))
+
+  // De-duplicate: skip GTFS-RT arrivals within ±2 min of a realtime train on the same line
+  const realtimeMins = realtimeTrains
+    .map(t => ({ line: t.Line, min: parseInt(t.Min, 10) }))
+    .filter(x => !isNaN(x.min))
+
+  const dedupedGtfs = gtfsDirArrivals.filter(g => {
+    const gMin = parseInt(g.Min, 10)
+    return !realtimeMins.some(r => r.line === g.Line && Math.abs(r.min - gMin) <= 2)
+  })
+
+  // Merge and sort by minutes
+  const merged = [...realtimeTrains, ...dedupedGtfs]
+  merged.sort((a, b) => {
+    const aMin = a.Min === 'ARR' || a.Min === 'BRD' ? 0 : parseInt(a.Min, 10) || 999
+    const bMin = b.Min === 'ARR' || b.Min === 'BRD' ? 0 : parseInt(b.Min, 10) || 999
+    return aMin - bMin
+  })
+
+  return merged
+}
+
 export default function StationBoard({
   config,
   trains,
+  gtfsArrivals,
+  stationMap,
   railIncidents,
   elevatorIncidents,
   freqStatsByDirection,
@@ -89,7 +150,9 @@ export default function StationBoard({
 
       {/* Direction sections */}
       {config.directions.map((dir, i) => {
-        const filteredTrains = filterDirection(trains, dir).slice(0, MAX_ARRIVALS)
+        const realtimeFiltered = filterDirection(trains, dir)
+        const merged = mergeArrivals(realtimeFiltered, gtfsArrivals, dir, stationMap)
+        const displayTrains = merged.slice(0, MAX_ARRIVALS)
         const dirFreqStats = freqStatsByDirection[i] ?? {}
         const accentColor = LINE_COLORS[dir.lines[0]]?.bg ?? '#888'
         const lineNames = dir.lines.map(l => LINE_COLORS[l]?.name ?? l).join(' · ')
@@ -109,7 +172,7 @@ export default function StationBoard({
                 </div>
                 <div className="px-4 py-3">
                   <TrainTable
-                    trains={filteredTrains}
+                    trains={displayTrains}
                     walkingMinutes={config.walkingMinutes}
                     emptyMessage={`No ${dir.label.toLowerCase()} trains predicted`}
                     compact={compact}
@@ -119,7 +182,7 @@ export default function StationBoard({
             ) : (
               <div className="rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 px-4 py-3">
                 <TrainTable
-                  trains={filteredTrains}
+                  trains={displayTrains}
                   walkingMinutes={config.walkingMinutes}
                   emptyMessage={`No ${dir.label.toLowerCase()} trains predicted`}
                   compact={compact}
