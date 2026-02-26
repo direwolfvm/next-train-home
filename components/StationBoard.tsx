@@ -12,6 +12,7 @@ import {
 } from '@/lib/types'
 import { LINE_COLORS, MAX_ARRIVALS } from '@/lib/constants'
 import { filterDirection } from '@/lib/trainFilter'
+import { calcScheduledFrequency } from '@/lib/frequency'
 import TrainTable from './TrainTable'
 import FrequencyPanel from './FrequencyPanel'
 import IncidentsPanel from './IncidentsPanel'
@@ -155,6 +156,14 @@ export default function StationBoard({
         const merged = mergeArrivals(realtimeFiltered, gtfsArrivals, dir, stationMap)
         const displayTrains = merged.slice(0, MAX_ARRIVALS)
         const dirFreqStats = freqStatsByDirection[i] ?? {}
+        const scheduledFreq = calcScheduledFrequency(gtfsArrivals, dir)
+        const enrichedStats: LineFrequencyStats = {}
+        for (const line of dir.lines) {
+          const existing = dirFreqStats[line] ?? {
+            currentAvgMinutes: null, scheduledAvgMinutes: null, trend: 'unknown' as const, sampleCount: 0,
+          }
+          enrichedStats[line] = { ...existing, scheduledAvgMinutes: scheduledFreq[line] ?? null }
+        }
         const accentColor = LINE_COLORS[dir.lines[0]]?.bg ?? '#888'
         const lineNames = dir.lines.map(l => LINE_COLORS[l]?.name ?? l).join(' · ')
 
@@ -192,7 +201,7 @@ export default function StationBoard({
             )}
 
             <FrequencyPanel
-              stats={dirFreqStats}
+              stats={enrichedStats}
               label={multiDir ? `${dir.label} · Frequency` : `${dir.label} Frequency`}
               compact={compact}
             />

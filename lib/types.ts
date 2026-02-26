@@ -42,6 +42,7 @@ export type FrequencyTrend = 'improving' | 'worsening' | 'stable' | 'unknown'
 
 export interface FrequencyStats {
   currentAvgMinutes: number | null
+  scheduledAvgMinutes: number | null
   trend: FrequencyTrend
   sampleCount: number
 }

@@ -1,4 +1,4 @@
-import { TrainPrediction, FrequencySnapshot, FrequencyStats, FrequencyTrend } from './types'
+import { TrainPrediction, FrequencySnapshot, FrequencyStats, FrequencyTrend, GtfsArrival, DirectionConfig } from './types'
 
 const WINDOW_MS = 90 * 60 * 1000  // 90 minutes
 const HALF_WINDOW_MS = 45 * 60 * 1000  // 45 minutes
@@ -69,7 +69,7 @@ export function calcTrend(snapshots: FrequencySnapshot[]): FrequencyTrend {
  */
 export function deriveFrequencyStats(snapshots: FrequencySnapshot[]): FrequencyStats {
   if (snapshots.length === 0) {
-    return { currentAvgMinutes: null, trend: 'unknown', sampleCount: 0 }
+    return { currentAvgMinutes: null, scheduledAvgMinutes: null, trend: 'unknown', sampleCount: 0 }
   }
 
   // Use the most recent snapshot as current frequency
@@ -78,7 +78,53 @@ export function deriveFrequencyStats(snapshots: FrequencySnapshot[]): FrequencyS
 
   return {
     currentAvgMinutes: Math.round(latest.averageIntervalMinutes * 10) / 10,
+    scheduledAvgMinutes: null,
     trend,
     sampleCount: snapshots.length,
   }
+}
+
+/**
+ * Calculate scheduled frequency per line from GTFS-RT arrival timestamps.
+ * Returns avg gap (in minutes) between consecutive arrivals for each line.
+ */
+export function calcScheduledFrequency(
+  gtfsArrivals: GtfsArrival[],
+  dir: DirectionConfig,
+): Record<string, number | null> {
+  const now = Date.now() / 1000
+  const directionId = dir.group === '1' ? 0 : 1
+
+  // Filter to matching direction + lines + future arrivals
+  const matching = gtfsArrivals.filter(a =>
+    (dir.lines as string[]).includes(a.line) &&
+    a.directionId === directionId &&
+    a.arrivalTime > now
+  )
+
+  // Group by line
+  const byLine: Record<string, number[]> = {}
+  for (const a of matching) {
+    if (!byLine[a.line]) byLine[a.line] = []
+    byLine[a.line].push(a.arrivalTime)
+  }
+
+  // Compute avg gap per line
+  const result: Record<string, number | null> = {}
+  for (const line of dir.lines) {
+    const times = byLine[line]
+    if (!times || times.length < 2) {
+      result[line] = null
+      continue
+    }
+    times.sort((a, b) => a - b)
+    let totalGap = 0
+    for (let i = 1; i < times.length; i++) {
+      totalGap += times[i] - times[i - 1]
+    }
+    const avgMinutes = totalGap / (times.length - 1) / 60
+    result[line] = Math.round(avgMinutes * 10) / 10
+  }
+
+  return result
 }

@@ -47,6 +47,13 @@ export default function FrequencyPanel({ stats, label, compact }: FrequencyPanel
                   {s.currentAvgMinutes != null ? `~${s.currentAvgMinutes} min` : '—'}
                 </span>
 
+                {/* Scheduled frequency */}
+                {s.scheduledAvgMinutes != null && (
+                  <span className="font-mono text-xs text-slate-400 dark:text-slate-600 tabular-nums">
+                    sched ~{s.scheduledAvgMinutes} min
+                  </span>
+                )}
+
                 {/* Trend icon + label */}
                 <span className={`text-sm font-bold ${cfg.color}`}>{cfg.icon}</span>
                 <span className={`text-xs ${cfg.color}`}>{cfg.label}</span>
