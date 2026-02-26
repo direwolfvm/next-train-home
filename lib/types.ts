@@ -10,6 +10,7 @@ export interface TrainPrediction {
   LocationCode: string
   LocationName: string
   Min: string // numeric, "ARR", "BRD", "---", or ""
+  scheduled?: boolean // true if from GTFS-RT feed
 }
 
 export interface RailIncident {

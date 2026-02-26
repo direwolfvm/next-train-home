@@ -129,6 +129,11 @@ export default function TrainTable({ trains, walkingMinutes, emptyMessage, compa
                   >
                     {mins.display}
                   </span>
+                  {train.scheduled && (
+                    <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-600">
+                      sched
+                    </span>
+                  )}
                 </td>
                 <td className={`${rowPy} text-right font-mono`}>
                   {!missed && (

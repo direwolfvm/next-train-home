@@ -62,6 +62,7 @@ function mergeArrivals(
       LocationCode: a.stationCode,
       LocationName: '',
       Min: String(Math.max(1, Math.round((a.arrivalTime - now) / 60))),
+      scheduled: true,
     }))
 
   // De-duplicate: skip GTFS-RT arrivals within ±2 min of a realtime train on the same line

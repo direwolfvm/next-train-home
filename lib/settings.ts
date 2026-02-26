@@ -14,7 +14,7 @@ export const DEFAULT_HOME_STATION: StationConfig = {
 export const DEFAULT_WORK_STATION: StationConfig = {
   stationCode: 'C03',
   stationName: 'Farragut West',
-  walkingMinutes: 0,
+  walkingMinutes: 6,
   directions: [
     { group: '2', lines: ['BL'], label: 'To Virginia' },
     { group: '1', lines: ['BL', 'OR', 'SV'], label: 'To Largo / New Carrollton' },
